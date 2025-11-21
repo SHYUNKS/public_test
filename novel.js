@@ -19,7 +19,6 @@ function toggleTheme() {
   }
 }
 
-// Load Saved Theme
 if (
   localStorage.getItem("theme") === "dark" ||
   (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches)
@@ -31,23 +30,18 @@ if (
 
 // 2. Font Size Management
 let currentFontSize = 18;
-
 function adjustFontSize(delta) {
   currentFontSize += delta;
-  // Limits
   if (currentFontSize < 14) currentFontSize = 14;
   if (currentFontSize > 32) currentFontSize = 32;
-
   container.style.fontSize = `${currentFontSize}px`;
 }
 
 // 3. Font Family Toggle
 let isSerif = true;
-
 function toggleFont() {
   const body = document.body;
   isSerif = !isSerif;
-
   if (isSerif) {
     body.classList.remove("font-sans");
     body.classList.add("font-serif");
@@ -59,12 +53,15 @@ function toggleFont() {
   }
 }
 
-// 4. AI Image Generation Logic
-async function generateImage(elementId) {
-  const element = document.getElementById(elementId);
+// 4. AI Image Generation Logic (Modified for Anime Style & Loop)
+async function generateImage(element) {
   if (!element) return;
 
-  const prompt = element.getAttribute("data-prompt");
+  // Get the prompt from the data attribute
+  const userPrompt = element.getAttribute("data-prompt");
+
+  // Create a strict instruction for Anime style
+  const enhancedPrompt = `Japanese Anime style illustration, high quality, detailed, 2D animation style, cel shaded. Scene description: ${userPrompt}`;
 
   try {
     const response = await fetch(
@@ -77,7 +74,7 @@ async function generateImage(elementId) {
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: "Create a high quality illustration for a novel: " + prompt }],
+              parts: [{ text: enhancedPrompt }],
             },
           ],
           generationConfig: {
@@ -93,9 +90,6 @@ async function generateImage(elementId) {
       throw new Error(data.error.message);
     }
 
-    // Extract Base64 Image
-    // Typically format is candidates[0].content.parts[0].inlineData.data
-    // But we need to find the part with inlineData since multimodal response might vary
     const candidate = data.candidates?.[0];
     const imagePart = candidate?.content?.parts?.find((p) => p.inlineData);
 
@@ -103,37 +97,35 @@ async function generateImage(elementId) {
       const base64Data = imagePart.inlineData.data;
       const mimeType = imagePart.inlineData.mimeType || "image/png";
 
-      // Create Image Element
       const img = new Image();
       img.src = `data:${mimeType};base64,${base64Data}`;
-      img.alt = "AI Generated Illustration";
+      img.alt = "Anime Style Illustration";
 
       img.onload = () => {
         element.innerHTML = ""; // Clear loader
         element.appendChild(img);
-        // Trigger reflow to enable transition
         setTimeout(() => img.classList.add("loaded"), 50);
       };
     } else {
-      throw new Error("No image data found in response");
+      throw new Error("No image data found");
     }
   } catch (error) {
     console.error("Image Generation Failed:", error);
     element.innerHTML = `<div class="text-red-500 text-sm p-4 bg-red-50 dark:bg-red-900/20 rounded text-center">
                     <p>이미지 생성 실패</p>
-                    <p class="text-xs mt-1 opacity-70">트래픽이 많거나 키 오류일 수 있습니다.</p>
                 </div>`;
   }
 }
 
-// Run on Window Load
+// Automatic Generation Loop on Load
 window.onload = function () {
-  // Delay slightly to prioritize text rendering
-  setTimeout(() => {
-    generateImage("image-slot-1");
-    // Stagger the second request slightly to be nice to the API limit
+  const imageContainers = document.querySelectorAll(".ai-image-container");
+
+  // Loop through all containers found
+  imageContainers.forEach((container, index) => {
+    // Stagger calls by 2.5 seconds to avoid rate limits and visual clutter
     setTimeout(() => {
-      generateImage("image-slot-2");
-    }, 2000);
-  }, 500);
+      generateImage(container);
+    }, index * 2500 + 500);
+  });
 };
